@@ -1,0 +1,33 @@
+---
+- name: Configure VM-Proxy with Nginx
+  hosts: vm-proxy
+  become: yes
+  vars:
+    nginx_user: "www-data"
+    nginx_port: 80
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Start Nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+    
+    - name: Verify Nginx is running
+      service_facts:
+      register: services
+
+    - name: Display Nginx status
+      debug:
+        msg: "Nginx is {{ services.ansible_facts.services['nginx.service'].state }}"
+
