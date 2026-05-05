@@ -36,7 +36,10 @@ Vagrant.configure("2") do |config|
         hostnamectl set-hostname #{vm[:name]} 
       SHELL
 
-      end
+        # Llamada a Ansible para la gestión de la configuración de cada máquina
+        node.vm.provision "ansible" do |ansible|
+          ansible.playbook = "playbook.yml"
+
     end
   end
 end
