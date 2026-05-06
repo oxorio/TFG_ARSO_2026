@@ -31,3 +31,32 @@
       debug:
         msg: "Nginx is {{ services.ansible_facts.services['nginx.service'].state }}"
 
+- name: Install Docker on VMs
+  hosts:
+    - vm-blue
+    - vm-green
+  become: yes
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Añadir el usuario vagrant al grupo docker (para evitar usar sudo docker)
+      user:
+        name: vagrant
+        groups: docker
+        append: yes
+    
