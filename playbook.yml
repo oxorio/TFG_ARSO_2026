@@ -3,60 +3,75 @@
   hosts: vm-proxy
   become: yes
   vars:
-    nginx_user: "www-data"
+    nginx_user: www-data
     nginx_port: 80
+    # Definimos el entorno objetivo (target_env) que recibiremos por terminal. Por defecto: blue
+    target_env: "blue"
+    # Diccionario que mapea los nombres con las IPs reales
+    env_ips:
+      blue: "10.0.0.11"
+      green: "10.0.0.12"
+    # Ansible buscará la IP en el diccionario usando el nombre que le pasemos por terminal (target_env)
+    backend_ip: "{{ env_ips[target_env] }}"
 
   tasks:
     - name: Update apt cache
       apt:
-        update_cache: yes
+        update_cache: yes 
         cache_valid_time: 3600
-
     - name: Install Nginx
       apt:
         name: nginx
         state: present
-
     - name: Start Nginx service
       service:
         name: nginx
         state: started
         enabled: yes
-    
+    - name: Copy reverse proxy configuration
+      template:
+        src: default.conf.j2
+        dest: /etc/nginx/sites-available/default
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
     - name: Verify Nginx is running
-      service_facts:
+      service_facts: null
       register: services
-
     - name: Display Nginx status
       debug:
-        msg: "Nginx is {{ services.ansible_facts.services['nginx.service'].state }}"
-
+        msg: Nginx is {{ services.ansible_facts.services['nginx.service'].state }}
 - name: Install Docker on VMs
   hosts:
     - vm-blue
     - vm-green
   become: yes
-
   tasks:
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
-
     - name: Install Docker
       apt:
         name: docker.io
         state: present
-
     - name: Start Docker service
       service:
         name: docker
         state: started
         enabled: yes
-
     - name: Añadir el usuario vagrant al grupo docker (para evitar usar sudo docker)
       user:
         name: vagrant
         groups: docker
         append: yes
-    
+    - name: Desplegar el contenedor de la aplicación
+      community.general.docker_container:
+        name: app-container
+        image: ossorio/tfg-arso-2026:blue
+        state: started
+        restart_policy: always
+        published_ports:
+          - 80:80
+        pull: yes
