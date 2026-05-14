@@ -3,3 +3,7 @@
 
 # Ignorar archivos ocultos del sistema de Mac
 .DS_Store
+
+# Ignorar claves del certificado SSL
+nginx-cert.pem
+nginx-key.pem

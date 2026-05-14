@@ -7,12 +7,14 @@
   become: yes
   vars:
     nginx_user: www-data
-    nginx_port: 80
+    nginx_port: 443
     target_env: "blue"
     env_ips:
       blue: "10.0.0.11"
       green: "10.0.0.12"
     backend_ip: "{{ env_ips[target_env] }}"
+    ssl_cert: /etc/ssl/certs/nginx-cert.pem
+    ssl_key: /etc/ssl/private/nginx-key.pem
 
   tasks:
     - name: Update apt cache
@@ -23,6 +25,18 @@
       apt:
         name: nginx
         state: present
+    - name: Copy public SSL certificate
+      copy:
+        src: nginx-cert.pem
+        dest: /etc/ssl/certs/nginx-cert.pem
+        owner: root
+        mode: '0644'
+    - name: Copy private SSL key
+      copy:
+        src: nginx-key.pem
+        dest: /etc/ssl/private/nginx-key.pem
+        owner: root
+        mode: '0600'
     - name: Start Nginx service
       service:
         name: nginx
@@ -77,7 +91,7 @@
       community.general.docker_container:
         name: app-container
         # Prioriza la imagen del pipeline, si no, usa el placeholder
-        image: "{{ app_image | default('ossorio/app-demo:5c7fdc9b7e8900e4708342213479ca9326f02a5b') }}"
+        image: "{{ app_image | default('ossorio/app-demo:5c7fdc9b7e8900e4708342213479ca9326f02a5b') }}" 
         state: started
         restart_policy: always
         published_ports:
