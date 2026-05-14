@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - dev
   workflow_dispatch: # Permite ejecutar el pipeline manualmente desde la interfaz de GitHub
     inputs:
       action_type:
@@ -102,7 +103,7 @@ jobs:
       # FASE 4: CONMUTAR TRÁFICO (Se salta en deploy_preview)
       # ---------------------------------------------------------
       - name: Conmutar el tráfico en el Nginx Proxy (Switch)
-        if: github.event_name == 'push' 
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main')
             || github.event.inputs.action_type == 'full_release'
             || github.event.inputs.action_type == 'promote_production' 
             || github.event.inputs.action_type == 'rollback'
