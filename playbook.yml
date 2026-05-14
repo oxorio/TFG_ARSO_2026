@@ -69,7 +69,7 @@
     - name: Desplegar el contenedor de la aplicación
       community.general.docker_container:
         name: app-container
-        image: "{{ app_image | default('tu_usuario/app-demo:blue') }}"
+        image: "{{ app_image | default('ossorio/app-demo:latest') }}"
         state: started
         restart_policy: always
         published_ports:
