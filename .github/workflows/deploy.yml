@@ -49,13 +49,18 @@ jobs:
       - name: Detectar el entorno activo actual
         id: slot
         run: |
-          # Hacemos una petición al proxy y miramos qué versión responde
-          if curl -s http://10.0.0.10 | grep -q "BLUE"; then
-            echo "El entorno activo es BLUE. El entorno en STANDBY es GREEN."
+          # Buscamos nuestra cabecera personalizada y extraemos su valor (blue o green)
+          CURRENT_ENV=$(curl -s -k -I https://mitfg.local | grep -i "X-Active-Env:" | awk '{print $2}' | tr -d '\r')
+          
+          echo "El proxy informa que el entorno activo es: $CURRENT_ENV"
+
+          if [[ "$CURRENT_ENV" == "blue" ]]; then
             echo "STANDBY=green" >> $GITHUB_ENV
-          else
-            echo "El entorno activo es GREEN. El entorno en STANDBY es BLUE."
+          elif [[ "$CURRENT_ENV" == "green" ]]; then
             echo "STANDBY=blue" >> $GITHUB_ENV
+          else
+            echo "ERROR: No se detectó la cabecera X-Active-Env. (Recibido: '$CURRENT_ENV')"
+            exit 1
           fi
 
       # ---------------------------------------------------------

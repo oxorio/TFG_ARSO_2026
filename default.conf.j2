@@ -14,6 +14,9 @@ server {
     ssl_certificate {{ ssl_cert }};
     ssl_certificate_key {{ ssl_key }};
 
+    # Añadimos una cabecera personalizada a la respuesta
+    add_header X-Active-Env "{{ target_env }}" always;
+
     location / {
         # Recibe la ip definida en el playbook de Ansible
         proxy_pass http://{{ backend_ip }}:80;
