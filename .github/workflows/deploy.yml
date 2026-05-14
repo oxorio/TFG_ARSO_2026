@@ -112,3 +112,16 @@ jobs:
           # enviar el tráfico al entorno que actualmente está marcado como STANDBY.
           # AVISO: Apuntamos exclusivamente a vm-proxy.
           TARGET_ENV=${{ env.STANDBY }} vagrant provision vm-proxy --provision-with ansible
+
+      # ---------------------------------------------------------
+      # FASE 5: Limpieza de imágenes antiguas
+      # ---------------------------------------------------------
+      - name: Limpieza de imágenes antiguas
+        if: github.event_name == 'push' 
+            || github.event.inputs.action_type == 'full_release' 
+            || github.event.inputs.action_type == 'deploy_preview'
+        working-directory: ${{ vars.PROJECT_PATH }}
+        run: |
+          echo "Limpiando imágenes huérfanas en vm-${{ env.STANDBY }}..."
+          # Este comando borra todas las imágenes que no estén siendo usadas por un contenedor activo
+          vagrant ssh vm-${{ env.STANDBY }} -c "sudo docker image prune -a -f"
