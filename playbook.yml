@@ -1,17 +1,17 @@
 ---
+# ============================================================
+# BLOQUE 1: Configuración del Proxy (Punto de entrada)
+# ============================================================
 - name: Configure VM-Proxy with Nginx
   hosts: vm-proxy
   become: yes
   vars:
     nginx_user: www-data
     nginx_port: 80
-    # Definimos el entorno objetivo (target_env) que recibiremos por terminal. Por defecto: blue
     target_env: "blue"
-    # Diccionario que mapea los nombres con las IPs reales
     env_ips:
       blue: "10.0.0.11"
       green: "10.0.0.12"
-    # Ansible buscará la IP en el diccionario usando el nombre que le pasemos por terminal (target_env)
     backend_ip: "{{ env_ips[target_env] }}"
 
   tasks:
@@ -36,13 +36,11 @@
       service:
         name: nginx
         state: reloaded
-    - name: Verify Nginx is running
-      service_facts: null
-      register: services
-    - name: Display Nginx status
-      debug:
-        msg: Nginx is {{ services.ansible_facts.services['nginx.service'].state }}
-- name: Install Docker on VMs
+
+# ============================================================
+# BLOQUE 2: Infraestructura Base (Común a ambos entornos)
+# ============================================================
+- name: Preparar Infraestructura Docker en Nodos de Aplicación
   hosts:
     - vm-blue
     - vm-green
@@ -61,14 +59,24 @@
         name: docker
         state: started
         enabled: yes
-    - name: Añadir el usuario vagrant al grupo docker (para evitar usar sudo docker)
+    - name: Añadir el usuario vagrant al grupo docker
       user:
         name: vagrant
         groups: docker
         append: yes
+
+# ============================================================
+# BLOQUE 3: Despliegue de Aplicación (Específico Blue-Green)
+# ============================================================
+- name: Desplegar Contenedor de Aplicación (Aislamiento de entorno)
+  # Usamos la variable dinámica. Si no se recibe, aplica a ambos por seguridad en local.
+  hosts: "{{ target_env_hosts | default('vm-blue,vm-green') }}"
+  become: yes
+  tasks:
     - name: Desplegar el contenedor de la aplicación
       community.general.docker_container:
         name: app-container
+        # Prioriza la imagen del pipeline, si no, usa el placeholder
         image: "{{ app_image | default('nginx:alpine') }}"
         state: started
         restart_policy: always

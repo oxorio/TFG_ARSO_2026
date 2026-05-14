@@ -40,11 +40,10 @@ Vagrant.configure("2") do |config|
         node.vm.provision "ansible" do |ansible|
           ansible.playbook = "playbook.yml"
 
-        # Le pasamos la variable backend_ip. 
-        # Toma el valor de la variable de entorno BACKEND_IP por terminal, 
-        # y si está vacía, usa la .11 por defecto.
         ansible.extra_vars = {
           target_env: ENV['TARGET_ENV'] || "blue",
+          # Esto construye el nombre de la máquina: "vm-blue" o "vm-green"
+          target_env_hosts: "vm-#{ENV['TARGET_ENV'] || 'blue'}", 
           app_image: ENV['APP_IMAGE'] || "nginx:alpine"
         }
       end
