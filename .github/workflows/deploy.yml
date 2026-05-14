@@ -50,7 +50,7 @@ jobs:
         id: slot
         run: |
           # Buscamos nuestra cabecera personalizada y extraemos su valor (blue o green)
-          CURRENT_ENV=$(curl -s -k -I https://mitfg.local | grep -i "X-Active-Env:" | awk '{print $2}' | tr -d '\r')
+          CURRENT_ENV=$(curl -s -k -I https://tfg-arso.local | grep -i "X-Active-Env:" | awk '{print $2}' | tr -d '\r')
           
           echo "El proxy informa que el entorno activo es: $CURRENT_ENV"
 
