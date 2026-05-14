@@ -37,6 +37,7 @@ jobs:
           fi
 
       - name: Desplegar la nueva versión en el entorno inactivo (Standby)
+        working-directory: ${{ vars.PROJECT_PATH }}
         run: |
           # Usamos Ansible para desplegar la nueva imagen en la máquina inactiva
           # Le pasamos la imagen exacta que acabamos de subir a Docker Hub
@@ -61,6 +62,7 @@ jobs:
           echo " Health check superado!"
 
       - name:  Conmutar el tráfico en el Nginx Proxy (Switch)
+        working-directory: ${{ vars.PROJECT_PATH }}
         run: |
           # Si llegamos aquí, la app funciona. Le decimos a Ansible que actualice Nginx
           TARGET_ENV=${{ env.target }} vagrant provision --provision-with ansible
