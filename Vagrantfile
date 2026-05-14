@@ -44,7 +44,8 @@ Vagrant.configure("2") do |config|
         # Toma el valor de la variable de entorno BACKEND_IP por terminal, 
         # y si está vacía, usa la .11 por defecto.
         ansible.extra_vars = {
-          target_env: ENV['TARGET_ENV'] || "blue"
+          target_env: ENV['TARGET_ENV'] || "blue",
+          app_image: ENV['APP_IMAGE'] || "ossorio/tfg-arso-2026:blue"
         }
       end
     end
