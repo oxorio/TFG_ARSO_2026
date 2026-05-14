@@ -1,0 +1,5 @@
+# Ignorar archivos locales de Vagrant
+.vagrant/
+
+# Ignorar archivos ocultos del sistema de Mac
+.DS_Store

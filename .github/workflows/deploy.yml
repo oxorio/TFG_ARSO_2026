@@ -1,0 +1,66 @@
+name: CI/CD Blue-Green Deployment
+
+# El pipeline se dispara cada vez que se hace un 'push' a la rama principal
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # IMPORTANTE: Le decimos que use el Runner instalado en la máquina local
+    runs-on: self-hosted
+
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v3
+
+      - name: Iniciar sesión en Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Construir y Subir la nueva imagen
+        run: |
+          # Usamos el SHA del commit como etiqueta única para no sobreescribir versiones
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }} ./app-demo
+          docker push ${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}
+
+      - name: Detectar el entorno activo actual
+        id: slot
+        run: |
+          # Hacemos una petición al proxy y miramos qué versión responde
+          if curl -s http://10.0.0.10 | grep -q "BLUE"; then
+            echo "El entorno activo es BLUE. Desplegaremos en GREEN."
+            echo "target=green" >> $GITHUB_ENV
+          else
+            echo "El entorno activo es GREEN. Desplegaremos en BLUE."
+            echo "target=blue" >> $GITHUB_ENV
+          fi
+
+      - name: Desplegar la nueva versión en el entorno inactivo (Standby)
+        run: |
+          # Usamos Ansible para desplegar la nueva imagen en la máquina inactiva
+          # Le pasamos la imagen exacta que acabamos de subir a Docker Hub
+          TARGET_ENV=${{ env.target }} vagrant provision --provision-with ansible --extra-vars "app_image=${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}"
+
+      - name:  Ejecutar Health Check en el nuevo entorno
+        run: |
+          # Si desplegamos en green (10.0.0.12), hacemos un curl directo a esa máquina para ver si responde 200 OK
+          if [ "${{ env.target }}" == "green" ]; then
+            CHECK_IP="10.0.0.12"
+          else
+            CHECK_IP="10.0.0.11"
+          fi
+          
+          echo "Haciendo ping a $CHECK_IP..."
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" http://$CHECK_IP)
+          
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo " Health check falló (Estado: $HTTP_STATUS). Iniciando Rollback automático..."
+            exit 1 # Esto detiene el pipeline inmediatamente, protegiendo el proxy de conmutar a un entorno roto
+          fi
+          echo " Health check superado!"
+
+      - name:  Conmutar el tráfico en el Nginx Proxy (Switch)
+        run: |
+          # Si llegamos aquí, la app funciona. Le decimos a Ansible que actualice Nginx
+          TARGET_ENV=${{ env.target }} vagrant provision --provision-with ansible
