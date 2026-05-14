@@ -40,7 +40,7 @@ jobs:
         run: |
           # Usamos Ansible para desplegar la nueva imagen en la máquina inactiva
           # Le pasamos la imagen exacta que acabamos de subir a Docker Hub
-          TARGET_ENV=${{ env.target }} vagrant provision --provision-with ansible --extra-vars "app_image=${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}"
+          TARGET_ENV=${{ env.target }} vagrant provision --provision-with ansible --extra-vars "app_image=${{ secrets.DOCKER_USERNAME }}/tfg-arso-2026:${{ github.sha }}"
 
       - name:  Ejecutar Health Check en el nuevo entorno
         run: |
