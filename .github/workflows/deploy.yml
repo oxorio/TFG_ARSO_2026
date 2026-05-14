@@ -5,51 +5,80 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch: # Permite ejecutar el pipeline manualmente desde la interfaz de GitHub
+    inputs:
+      action_type:
+        description: 'Selecciona el tipo de despliegue'
+        required: true
+        default: 'full_release'
+        type: choice
+        options:
+          - full_release       # 1. Despliega la nueva versión y conmuta el tráfico
+          - deploy_preview     # 2. Despliega en standby pero NO conmuta el tráfico
+          - promote_production # 3. Solo conmuta el tráfico (Paso a producción de la preview)
+          - rollback           # 4. Botón de rollback para volver a la versión anterior
 
 jobs:
   deploy:
-    # IMPORTANTE: Le decimos que use el Runner instalado en la máquina local
     runs-on: self-hosted
 
     steps:
       - name: Descargar el código del repositorio
         uses: actions/checkout@v3
 
+      # ---------------------------------------------------------
+      # FASE 1: BUILD & PUSH (Se salta si es Rollback o Promote)
+      # ---------------------------------------------------------
       - name: Iniciar sesión en Docker Hub
+        if: github.event_name == 'push' 
+            || github.event.inputs.action_type == 'full_release' 
+            || github.event.inputs.action_type == 'deploy_preview'
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Construir y Subir la nueva imagen
+        if: github.event_name == 'push' 
+            || github.event.inputs.action_type == 'full_release' 
+            || github.event.inputs.action_type == 'deploy_preview'
         run: |
-          # Usamos el SHA del commit como etiqueta única para no sobreescribir versiones
           docker build -t ${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }} ./app-demo
           docker push ${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}
 
+      # ---------------------------------------------------------
+      # FASE 2: DETECCIÓN (Se ejecuta SIEMPRE)
+      # ---------------------------------------------------------
       - name: Detectar el entorno activo actual
         id: slot
         run: |
           # Hacemos una petición al proxy y miramos qué versión responde
           if curl -s http://10.0.0.10 | grep -q "BLUE"; then
-            echo "El entorno activo es BLUE. Desplegaremos en GREEN."
-            echo "target=green" >> $GITHUB_ENV
+            echo "El entorno activo es BLUE. El entorno en STANDBY es GREEN."
+            echo "STANDBY=green" >> $GITHUB_ENV
           else
-            echo "El entorno activo es GREEN. Desplegaremos en BLUE."
-            echo "target=blue" >> $GITHUB_ENV
+            echo "El entorno activo es GREEN. El entorno en STANDBY es BLUE."
+            echo "STANDBY=blue" >> $GITHUB_ENV
           fi
 
+      # ---------------------------------------------------------
+      # FASE 3: DESPLIEGUE (Se salta si es Rollback o Promote)
+      # ---------------------------------------------------------
       - name: Desplegar la nueva versión en el entorno inactivo (Standby)
+        if: github.event_name == 'push' 
+            || github.event.inputs.action_type == 'full_release' 
+            || github.event.inputs.action_type == 'deploy_preview'
         working-directory: ${{ vars.PROJECT_PATH }}
         env:
-          TARGET_ENV: ${{ env.target }}
+          TARGET_ENV: ${{ env.STANDBY }}
           APP_IMAGE: "${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}"
         run: |
-          # Usamos Ansible para desplegar la nueva imagen en la máquina inactiva
-          # Le pasamos la imagen exacta que acabamos de subir a Docker Hub
-          TARGET_ENV=${{ env.target }} APP_IMAGE="${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}" vagrant provision --provision-with ansible
+          # AVISO: Se especifica la máquina destino (vm-blue o vm-green) para no pisar el cluster entero
+          TARGET_ENV=${{ env.STANDBY }} APP_IMAGE="${{ env.APP_IMAGE }}" vagrant provision vm-${{ env.STANDBY }} --provision-with ansible
 
-      - name:  Ejecutar Health Check en el nuevo entorno
+      - name: Ejecutar Health Check en el nuevo entorno
+        if: github.event_name == 'push' 
+            || github.event.inputs.action_type == 'full_release' 
+            || github.event.inputs.action_type == 'deploy_preview'
         run: |
-          # Si desplegamos en green (10.0.0.12), hacemos un curl directo a esa máquina para ver si responde 200 OK
-          if [ "${{ env.target }}" == "green" ]; then
+          if [ "${{ env.STANDBY }}" == "green" ]; then
             CHECK_IP="10.0.0.12"
           else
             CHECK_IP="10.0.0.11"
@@ -59,16 +88,22 @@ jobs:
           HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" http://$CHECK_IP)
           
           if [ "$HTTP_STATUS" -ne 200 ]; then
-            echo " Health check falló (Estado: $HTTP_STATUS). Iniciando Rollback automático..."
-            exit 1 # Esto detiene el pipeline inmediatamente, protegiendo el proxy de conmutar a un entorno roto
+            echo "Health check falló (Estado: $HTTP_STATUS)."
+            exit 1 
           fi
-          echo " Health check superado!"
+          echo "Health check superado!"
 
-      - name:  Conmutar el tráfico en el Nginx Proxy (Switch)
+      # ---------------------------------------------------------
+      # FASE 4: CONMUTAR TRÁFICO (Se salta en deploy_preview)
+      # ---------------------------------------------------------
+      - name: Conmutar el tráfico en el Nginx Proxy (Switch)
+        if: github.event_name == 'push' 
+            || github.event.inputs.action_type == 'full_release'
+            || github.event.inputs.action_type == 'promote_production' 
+            || github.event.inputs.action_type == 'rollback'
         working-directory: ${{ vars.PROJECT_PATH }}
-        env:
-          TARGET_ENV: ${{ env.target }}
-          APP_IMAGE: "${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}"
         run: |
-          # Si llegamos aquí, la app funciona. Le decimos a Ansible que actualice Nginx
-          TARGET_ENV=${{ env.target }} APP_IMAGE="${{ secrets.DOCKER_USERNAME }}/app-demo:${{ github.sha }}" vagrant provision --provision-with ansible
+          # Tanto si promovemos la preview como si hacemos rollback, el objetivo siempre es
+          # enviar el tráfico al entorno que actualmente está marcado como STANDBY.
+          # AVISO: Apuntamos exclusivamente a vm-proxy.
+          TARGET_ENV=${{ env.STANDBY }} vagrant provision vm-proxy --provision-with ansible
