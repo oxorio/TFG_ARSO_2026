@@ -45,7 +45,7 @@ Vagrant.configure("2") do |config|
         # y si está vacía, usa la .11 por defecto.
         ansible.extra_vars = {
           target_env: ENV['TARGET_ENV'] || "blue",
-          app_image: ENV['APP_IMAGE'] || "ossorio/tfg-arso-2026:blue"
+          app_image: ENV['APP_IMAGE'] || "ossorio/app-demo:latest"
         }
       end
     end
