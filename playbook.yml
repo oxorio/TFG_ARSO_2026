@@ -70,14 +70,14 @@
 # ============================================================
 - name: Desplegar Contenedor de Aplicación (Aislamiento de entorno)
   # Usamos la variable dinámica. Si no se recibe, aplica a ambos por seguridad en local.
-  hosts: "{{ target_env_hosts | default('vm-blue,vm-green') }}"
+  hosts: "{{ target_env_hosts }}"
   become: yes
   tasks:
     - name: Desplegar el contenedor de la aplicación
       community.general.docker_container:
         name: app-container
         # Prioriza la imagen del pipeline, si no, usa el placeholder
-        image: "{{ app_image | default('nginx:alpine') }}"
+        image: "{{ app_image | default('ossorio/app-demo:5c7fdc9b7e8900e4708342213479ca9326f02a5b') }}"
         state: started
         restart_policy: always
         published_ports:

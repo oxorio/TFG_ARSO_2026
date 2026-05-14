@@ -44,7 +44,7 @@ Vagrant.configure("2") do |config|
           target_env: ENV['TARGET_ENV'] || "blue",
           # Esto construye el nombre de la máquina: "vm-blue" o "vm-green"
           target_env_hosts: "vm-#{ENV['TARGET_ENV'] || 'blue'}", 
-          app_image: ENV['APP_IMAGE'] || "nginx:alpine"
+          app_image: ENV['APP_IMAGE'] || "ossorio/app-demo:5c7fdc9b7e8900e4708342213479ca9326f02a5b"
         }
       end
     end
